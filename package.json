@@ -1,0 +1,21 @@
+{
+  "name": "genniabot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.ts",
+  "scripts": {
+    "start": "ts-node app.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "@types/node": "^20.4.2",
+    "socket.io-client": "^4.7.1",
+    "ts-node": "^10.9.1"
+  }
+}

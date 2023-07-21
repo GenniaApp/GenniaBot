@@ -2,9 +2,49 @@ import Point from './point';
 import Player from './player';
 import GameMap from './map';
 import MapDiff from './map-diff';
-import GameRecord from './game-record';
 
 export { Point, Player, GameMap, MapDiff };
+
+export interface ExPosition {
+  x: number;
+  y: number;
+  color: number;
+}
+
+export interface GBot {
+  roomId: string;
+  room: Room | null;
+  username: string;
+  myPlayerId: string | null;
+  color: number | null;
+  myGeneral: Position | null,
+  enemyGeneral: Array<ExPosition>,
+  initGameInfo: initGameInfo | null;
+  gameMap: TileProp[][] | null;
+  queue: Array<QueItem> | null;
+}
+
+export enum QuePurpose {
+  Defend = 0,
+  Attack = 1,
+  AttackGather = 2,
+  AttackGeneral = 3,
+  ExpandCity = 4,
+  ExpandLand = 5,
+}
+
+export interface QueItem {
+  purpose: QuePurpose;
+  priority: number;
+  from: Position;
+  to: Position;
+}
+
+export interface BFSQueItem {
+  pos: Position;
+  step: number;
+  way?: Position[];
+}
 
 export interface initGameInfo {
   king: Position;
@@ -69,7 +109,7 @@ export class Room {
     public fogOfWar: boolean = true,
     public deathSpectator: boolean = true, // allow dead player to watch game
     public globalMapDiff: MapDiff | null = null,
-    public gameRecord: GameRecord | null = null,
+    public gameRecord: any,
     public map: GameMap | null = null,
     public gameLoop: any = null, // gameLoop function
     public players: Player[] = new Array<Player>(),
@@ -111,41 +151,3 @@ export type TilesProp = TileProp[];
 export type MapData = TilesProp[];
 
 export type MapDiffData = (number | TileProp)[]; // number: same count, TileProp: diff
-
-
-export type CustomMapTileData = [TileType,
-  number | null, // color, when color == null it means no player own this tile
-  number | null, // unitsCount
-  boolean, // isRevealed 
-  number, // King Priority: todo 暂时没有什么用
-];
-
-export interface QueueDisplayData {
-  className: string;
-  text: string;
-}
-
-// className: string, text: string
-export type MapQueueData = QueueDisplayData[][]; //  same size as MapData
-
-export const TileType2Image: Record<TileType, string> = {
-  [TileType.King]: '/img/king.png',
-  [TileType.City]: '/img/city.png',
-  [TileType.Fog]: '',
-  [TileType.Obstacle]: '/img/obstacle.png',
-  [TileType.Plain]: '',
-  [TileType.Mountain]: '/img/mountain.png',
-  [TileType.Swamp]: '/img/swamp.png',
-};
-
-export interface SnackState {
-  open: boolean;
-  title: string;
-  message: string;
-}
-
-export interface GameRecordPerTurn {
-  turn: number;
-  data: MapDiffData;
-  lead: LeaderBoardTable;
-}

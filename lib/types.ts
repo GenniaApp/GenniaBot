@@ -1,7 +1,7 @@
-import Point from './point';
-import Player from './player';
-import GameMap from './map';
-import MapDiff from './map-diff';
+import Point from "./point";
+import Player from "./player";
+import GameMap from "./map";
+import MapDiff from "./map-diff";
 
 export { Point, Player, GameMap, MapDiff };
 
@@ -17,11 +17,11 @@ export interface GBot {
   username: string;
   myPlayerId: string | null;
   color: number | null;
-  myGeneral: Position | null,
-  enemyGeneral: Array<ExPosition>,
+  myGeneral: Position | null;
+  enemyGeneral: Array<ExPosition>;
   initGameInfo: initGameInfo | null;
   gameMap: TileProp[][] | null;
-  queue: Array<QueItem> | null;
+  queue: AttackQueue | null;
 }
 
 export enum QuePurpose {
@@ -38,12 +38,40 @@ export interface QueItem {
   priority: number;
   from: Position;
   to: Position;
+  target: Position;
+}
+
+export class AttackQueue {
+  constructor(public que: Array<QueItem> = []) {}
+
+  pushBack(item: QueItem): void {
+    while (
+      this.que.length > 0 &&
+      this.que[this.que.length - 1].priority < item.priority
+    ) {
+      this.que.pop();
+    }
+    this.que.push(item);
+  }
+
+  popFront(): QueItem | undefined {
+    return this.que.shift();
+  }
+
+  isEmpty(): boolean {
+    return this.que.length === 0;
+  }
 }
 
 export interface BFSQueItem {
   pos: Position;
   step: number;
-  way?: Position[];
+}
+
+export interface ExBFSQueueItem {
+  pos: Position;
+  step: number;
+  way: Position[];
 }
 
 export interface initGameInfo {
@@ -53,10 +81,10 @@ export interface initGameInfo {
 }
 
 export interface SelectedMapTileInfo {
-  x: number,
-  y: number,
-  half: boolean,
-  unitsCount: number | null,
+  x: number;
+  y: number;
+  half: boolean;
+  unitsCount: number | null;
 }
 
 export interface Position {
@@ -89,13 +117,13 @@ export class Message {
     public content: string,
     public target?: UserData | null,
     public turn?: number
-  ) { }
+  ) {}
 }
 
 export class Room {
   constructor(
     public id: string,
-    public roomName: string = 'Untitled',
+    public roomName: string = "Untitled",
     public gameStarted: boolean = false,
     public forceStartNum: number = 0,
     public mapGenerated: boolean = false,
@@ -114,7 +142,7 @@ export class Room {
     public gameLoop: any = null, // gameLoop function
     public players: Player[] = new Array<Player>(),
     public generals: Point[] = new Array<Point>()
-  ) { }
+  ) {}
 
   toJSON() {
     const { gameLoop, generals, ...json } = this;
@@ -141,9 +169,10 @@ export enum RoomUiStatus {
   gameOverConfirm,
 }
 
-export type TileProp = [TileType,
+export type TileProp = [
+  TileType,
   number | null, // color, when color == null it means no player own this tile
-  number | null, // unitsCount
+  number | null // unitsCount
 ];
 
 export type TilesProp = TileProp[];

@@ -5,16 +5,19 @@
   "main": "app.ts",
   "scripts": {
     "start": "ts-node app.ts",
+    "dev": "nodemon",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "nodemon": "^3.0.1",
     "typescript": "^5.1.6"
   },
   "dependencies": {
     "@types/node": "^20.4.2",
+    "dotenv": "^16.3.1",
     "socket.io-client": "^4.7.1",
     "ts-node": "^10.9.1"
   }

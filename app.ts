@@ -1,4 +1,5 @@
 import io from "socket.io-client";
+import dotenv from 'dotenv';
 import {
   GBot,
   QueItem,
@@ -16,6 +17,8 @@ import {
   AttackQueue,
   ExBFSQueueItem,
 } from "./lib/types";
+
+dotenv.config();
 
 if (!process.env.SERVER_URL || !process.env.ROOM_ID) {
   throw new Error("Important arguments missing.");

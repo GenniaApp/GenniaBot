@@ -43,7 +43,7 @@ export interface QueItem {
 }
 
 export class AttackQueue {
-  constructor(public que: Array<QueItem> = []) {}
+  constructor(public que: Array<QueItem> = []) { }
 
   pushBack(item: QueItem): void {
     // while (
@@ -118,7 +118,7 @@ export class Message {
     public content: string,
     public target?: UserData | null,
     public turn?: number
-  ) {}
+  ) { }
 }
 
 export class Room {
@@ -143,7 +143,7 @@ export class Room {
     public gameLoop: any = null, // gameLoop function
     public players: Player[] = new Array<Player>(),
     public generals: Point[] = new Array<Point>()
-  ) {}
+  ) { }
 
   toJSON() {
     const { gameLoop, generals, ...json } = this;

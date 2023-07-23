@@ -1,6 +1,6 @@
 {
   "ignore": [".git", "node_modules", "dist"],
-  "watch": ["./app.ts"],
+  "watch": ["./app.ts", "./lib"],
   "exec": "ts-node app.ts",
   "ext": "ts"
 }

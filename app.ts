@@ -193,6 +193,7 @@ async function handleMove(turnsCount: number) {
 
       let a = gbot.queue.popFront();
       if (a) {
+        // console.log('attack:', a)
         socket.emit("attack", a.from, a.to, false);
         return;
       }
@@ -292,13 +293,17 @@ async function gatherArmies(
     let mapHeight = gbot.initGameInfo.mapHeight;
     let queue = new Array<BFSQueItem>();
     queue.push({ step: 0, pos: toPos });
-    let possibleWay = new Array(mapWidth).fill(
-      new Array<PossibleWay>(mapHeight).fill({
-        val: -9999999,
-        way: [],
-        tag: false,
-      })
-    );
+    let possibleWay: PossibleWay[][] = new Array(mapWidth);
+    for (let i = 0; i < mapWidth; i++) {
+      possibleWay[i] = new Array<PossibleWay>(mapHeight);
+      for (let j = 0; j < mapHeight; j++) {
+        possibleWay[i][j] = {
+          val: -9999999,
+          way: [],
+          tag: false,
+        };
+      }
+    }
     if (gbot.gameMap[toPos.x][toPos.y][1] !== gbot.color) {
       possibleWay[toPos.x][toPos.y] = {
         val: -(gbot.gameMap[toPos.x][toPos.y][2] as number),

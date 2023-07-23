@@ -31,6 +31,7 @@ const gbot: GBot = {
   enemyGeneral: new Array<ExPosition>(),
   initGameInfo: null,
   gameMap: null,
+  totalViewed: null,
   queue: new AttackQueue(),
 };
 
@@ -101,6 +102,9 @@ function initMap(mapWidth: number, mapHeight: number) {
   gbot.gameMap = Array.from(Array(mapWidth), () =>
     Array(mapHeight).fill([TileType.Fog, null, null])
   );
+  gbot.totalViewed = Array.from(Array(mapWidth), () =>
+    Array(mapHeight).fill(false)
+  );
 }
 
 const unRevealed = (tile: TileProp) =>
@@ -112,9 +116,9 @@ const unMoveable = (tile: TileProp, ignoreCity: boolean) =>
   (ignoreCity && tile[0] === TileType.City);
 
 const posOutOfRange = (pos: Position) => {
-  if (!gbot.gameMap) return true;
-  let mapWidth = gbot.gameMap.length;
-  let mapHeight = gbot.gameMap[0].length;
+  if (!gbot.gameMap || !gbot.initGameInfo) return true;
+  let mapWidth = gbot.initGameInfo.mapWidth;
+  let mapHeight = gbot.initGameInfo.mapHeight;
   if (pos.x < 0 || pos.x >= mapWidth) return true;
   if (pos.y < 0 || pos.y >= mapHeight) return true;
   return false;
@@ -125,9 +129,9 @@ const calcDist = (a: Position, b: Position) =>
 
 async function patchMap(mapDiff: MapDiffData) {
   try {
-    if (!gbot.gameMap) return;
-    let mapWidth = gbot.gameMap.length;
-    let mapHeight = gbot.gameMap[0].length;
+    if (!gbot.gameMap || !gbot.totalViewed || !gbot.initGameInfo) return;
+    let mapWidth = gbot.initGameInfo.mapWidth;
+    let mapHeight = gbot.initGameInfo.mapHeight;
     let flattened = gbot.gameMap.flat();
     let newState = [...gbot.gameMap];
     for (let i = 0, j = 0; i < mapDiff.length; i++) {
@@ -141,6 +145,8 @@ async function patchMap(mapDiff: MapDiffData) {
     for (let i = 0; i < mapWidth; ++i) {
       for (let j = 0; j < mapHeight; ++j) {
         newState[i][j] = flattened[i * mapHeight + j];
+        if (!gbot.totalViewed[i][j] && !unRevealed(newState[i][j]))
+          gbot.totalViewed[i][j] = true;
         if (newState[i][j][0] === TileType.King && newState[i][j][1]) {
           if (newState[i][j][1] === gbot.color) gbot.myGeneral = { x: i, y: j };
           else if (
@@ -166,7 +172,8 @@ async function patchMap(mapDiff: MapDiffData) {
 async function handleMove(turnsCount: number) {
   try {
     if (!gbot.gameMap || !gbot.initGameInfo || !gbot.color) return;
-
+    let mapWidth = gbot.initGameInfo.mapWidth;
+    let mapHeight = gbot.initGameInfo.mapHeight;
     if (gbot.queue && !gbot.queue.isEmpty()) {
       while (!gbot.queue.isEmpty()) {
         let item = gbot.queue.que[0];
@@ -182,20 +189,25 @@ async function handleMove(turnsCount: number) {
       }
 
       let a = gbot.queue.popFront();
-      if (a) socket.emit("attack", a.from, a.to, false);
+      if (a) {
+        socket.emit("attack", a.from, a.to, false);
+        return;
+      }
+    }
+    if (gbot.enemyGeneral.length > 0) {
+      for (let a of gbot.enemyGeneral) {
+        await gatherArmies(QuePurpose.AttackGeneral, 100, { x: a.x, y: a.y }, 2 * (mapWidth + mapHeight));
+      }
+      return;
     }
 
-    for (let a of gbot.enemyGeneral) {
-      await gatherArmies(QuePurpose.AttackGeneral, 100, { x: a.x, y: a.y }, 500);
-    }
+    if (await detectThreat()) return;
 
     if ((turnsCount + 1) % 17 === 0) {
-      await quickExpand(100);
+      await quickExpand();
     } else if (turnsCount + 1 > 17) {
       await expandLand();
     }
-
-    await detectThreat();
   } catch (err) {
     console.log(err);
   }
@@ -207,10 +219,10 @@ interface ThreatTile {
   val: number;
 }
 
-async function detectThreat() {
+async function detectThreat(): Promise<boolean> {
   try {
     // console.log("detectThreat started");
-    if (!gbot.myGeneral || !gbot.gameMap) return;
+    if (!gbot.myGeneral || !gbot.gameMap) return false;
     let queue = new Array<BFSQueItem>(),
       book = new Array<string>();
     queue.push({ pos: gbot.myGeneral, step: 0 }), book.push(JSON.stringify(gbot.myGeneral));
@@ -249,9 +261,12 @@ async function detectThreat() {
       await gatherArmies(QuePurpose.Defend, threat.val, threat.pos, 200);
     }
 
+    return selected.length > 0;
+
     // console.log("detectThreat ended");
   } catch (err) {
     console.log(err);
+    return false;
   }
 }
 
@@ -269,9 +284,9 @@ async function gatherArmies(
 ): Promise<number> {
   try {
     // console.log("gatherArmies started");
-    if (!gbot.gameMap || !gbot.queue) return 0;
-    let mapWidth = gbot.gameMap.length;
-    let mapHeight = gbot.gameMap[0].length;
+    if (!gbot.gameMap || !gbot.queue || !gbot.initGameInfo) return 0;
+    let mapWidth = gbot.initGameInfo.mapWidth;
+    let mapHeight = gbot.initGameInfo.mapHeight;
     let queue = new Array<BFSQueItem>();
     queue.push({ step: 0, pos: toPos });
     let possibleWay = new Array(mapWidth).fill(
@@ -326,7 +341,8 @@ async function gatherArmies(
       if (x.val > maxWay.val) maxWay = x;
     });
     // console.log("gatherArmies ended");
-    if (maxWay.val === 0) return 0;
+    if (maxWay.val <= 0) return 0;
+    console.log(maxWay.way);
     let prev: Position | null = null;
     for (let next of maxWay.way) {
       if (prev) {
@@ -348,46 +364,73 @@ async function gatherArmies(
   }
 }
 
-async function quickExpand(limit: number) {
+async function quickExpand() {
   try {
     // console.log("quickExpand started");
-    if (!gbot.myGeneral || !gbot.gameMap || !gbot.queue) return;
-    let queue = new Array<ExBFSQueueItem>(),
-      book = new Array<string>();
-    queue.push({ pos: gbot.myGeneral, step: 0, way: [gbot.myGeneral] }),
-      book.push(JSON.stringify(gbot.myGeneral));
-    let front = 0,
-      end = 0;
-    let D = [...directions];
+    if (!gbot.gameMap || !gbot.totalViewed || !gbot.queue || !gbot.myGeneral || !gbot.initGameInfo) return 0;
+    let mapWidth = gbot.initGameInfo.mapWidth;
+    let mapHeight = gbot.initGameInfo.mapHeight;
+    let queue = new Array<BFSQueItem>();
+    queue.push({ step: 0, pos: gbot.myGeneral });
+    let possibleWay = new Array(mapWidth).fill(
+      new Array<PossibleWay>(mapHeight).fill({
+        val: 0,
+        way: [],
+        tag: false,
+      })
+    );
+    possibleWay[gbot.myGeneral.x][gbot.myGeneral.y] = {
+      val: gbot.gameMap[gbot.myGeneral.x][gbot.myGeneral.y][2] as number,
+      way: [gbot.myGeneral],
+      tag: false,
+    };
+    let front = 0, end = 0;
     while (front <= end) {
       let a = queue[front++];
-      if (!a.way) continue; // for TypeScript check
-      else if (a.way.length > limit) return;
-      D = D.sort(() => Math.random() - 0.5);
-      for (let d of D) {
+      possibleWay[a.pos.x][a.pos.y].tag = true;
+      for (let d of directions.sort(() => Math.random() - .5)) {
         let b: Position = { x: a.pos.x + d[0], y: a.pos.y + d[1] };
-        if (
-          book.includes(JSON.stringify(b)) ||
-          posOutOfRange(b) ||
-          unRevealed(gbot.gameMap[b.x][b.y]) ||
-          unMoveable(gbot.gameMap[b.x][b.y], true)
-        )
+        if (posOutOfRange(b) || unMoveable(gbot.gameMap[b.x][b.y], false) || possibleWay[b.x][b.y].tag)
           continue;
-        queue.push({ pos: b, step: a.step + 1, way: [...a.way, b] });
-        book.push(JSON.stringify(b));
-        ++end;
+        let newVal = possibleWay[a.pos.x][a.pos.y].val - 1;
+        if (gbot.gameMap[b.x][b.y][1] !== gbot.color) {
+          if (gbot.gameMap[b.x][b.y][0] === TileType.City) continue;
+          newVal -= gbot.gameMap[b.x][b.y][2] as number;
+        } else {
+          newVal += gbot.gameMap[b.x][b.y][2] as number;
+        }
+        if (possibleWay[b.x][b.y].val >= newVal)
+          continue;
+        let newWay = [...possibleWay[a.pos.x][a.pos.y].way, b];
+        queue.push({ step: a.step + 1, pos: b }), ++end;
+        possibleWay[b.x][b.y] = {
+          val: newVal,
+          way: newWay,
+          tag: false,
+        };
       }
     }
+    let maxWay: PossibleWay = { val: 0, way: [], tag: false };
+    possibleWay.flat().forEach((a) => {
+      if (a.val > 0 && !(gbot.totalViewed as boolean[][])[a.way[a.way.length - 1].x][a.way[a.way.length - 1].y]) {
+        if (maxWay.val === 0) {
+          maxWay = a;
+        } else if (Math.random() < .5) {
+          maxWay = a;
+        }
+      }
+    });
+    if (maxWay.val === 0) return 0;
+    console.log('QuickExpand:', maxWay.way);
     let prev: Position | null = null;
-    for (let next of queue[end].way) {
+    for (let next of maxWay.way) {
       if (prev) {
-        console.log(prev, next);
         gbot.queue.pushBack({
           from: prev,
           to: next,
           purpose: QuePurpose.ExpandLand,
-          priority: 10,
-          target: queue[end].way[queue[end].way.length - 1] as Position,
+          priority: 50,
+          target: maxWay.way[maxWay.way.length - 1],
         });
       }
       prev = next;
@@ -401,10 +444,10 @@ async function quickExpand(limit: number) {
 async function expandLand() {
   try {
     // console.log("expandLand started");
-    if (!gbot.gameMap) return;
+    if (!gbot.gameMap || !gbot.initGameInfo) return;
     let tiles = new Array<Position>();
-    let mapWidth = gbot.gameMap.length;
-    let mapHeight = gbot.gameMap[0].length;
+    let mapWidth = gbot.initGameInfo.mapWidth;
+    let mapHeight = gbot.initGameInfo.mapHeight;
     for (let i = 0; i < mapWidth; ++i)
       for (let j = 0; j < mapHeight; ++j)
         if (gbot.gameMap[i][j][0] === TileType.Plain && gbot.gameMap[i][j][1] !== gbot.color)

@@ -21,6 +21,7 @@ export interface GBot {
   enemyGeneral: Array<ExPosition>;
   initGameInfo: initGameInfo | null;
   gameMap: TileProp[][] | null;
+  totalViewed: boolean[][] | null;
   queue: AttackQueue | null;
 }
 
@@ -45,12 +46,12 @@ export class AttackQueue {
   constructor(public que: Array<QueItem> = []) {}
 
   pushBack(item: QueItem): void {
-    while (
-      this.que.length > 0 &&
-      this.que[this.que.length - 1].priority < item.priority
-    ) {
-      this.que.pop();
-    }
+    // while (
+    //   this.que.length > 0 &&
+    //   this.que[this.que.length - 1].priority < item.priority
+    // ) {
+    //   this.que.pop();
+    // }
     this.que.push(item);
   }
 

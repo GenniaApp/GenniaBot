@@ -17,6 +17,8 @@ export interface GBot {
   username: string;
   myPlayerId: string | null;
   color: number | null;
+  attackColor: number;
+  attackPosition: Position | null;
   myGeneral: Position | null;
   enemyGeneral: Array<ExPosition>;
   initGameInfo: initGameInfo | null;

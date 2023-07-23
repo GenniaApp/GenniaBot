@@ -30,6 +30,8 @@ const gbot: GBot = {
   username: process.env.NAME || "GenniaBot",
   myPlayerId: null,
   color: null,
+  attackColor: -1,
+  attackPosition: null,
   myGeneral: null,
   enemyGeneral: new Array<ExPosition>(),
   initGameInfo: null,
@@ -70,7 +72,7 @@ socket.on("error", (title: string, message: string) => {
   // console.log("GET ERROR FROM SERVER:\n", title, message);
 });
 
-socket.emit("force_start");
+// socket.emit("force_start");
 
 socket.on("game_started", (initGameInfo: initGameInfo) => {
   // console.log("Game started:", initGameInfo);
@@ -165,6 +167,7 @@ async function patchMap(mapDiff: MapDiffData) {
         }
       }
     }
+    gbot.enemyGeneral = gbot.enemyGeneral.filter(g => newState[g.x][g.y][1] === g.color || newState[g.x][g.y][0] === TileType.Fog)
 
     gbot.gameMap = [...newState];
   } catch (err) {
@@ -198,11 +201,64 @@ async function handleMove(turnsCount: number) {
         return;
       }
     }
-    if (gbot.enemyGeneral.length > 0) {
+    if (gbot.enemyGeneral.length > 0 && gbot.queue) {
       for (let a of gbot.enemyGeneral) {
+        gbot.queue.que = [];
+        if (a.color === gbot.attackColor) {
+          await gatherArmies(QuePurpose.AttackGeneral, 5, { x: a.x, y: a.y }, 2 * (mapWidth + mapHeight));
+        }
         await gatherArmies(QuePurpose.AttackGeneral, 100, { x: a.x, y: a.y }, 2 * (mapWidth + mapHeight));
       }
       return;
+    }
+
+    if (gbot.attackColor !== -1 && gbot.attackPosition && gbot.queue) {
+      if (gbot.gameMap[gbot.attackPosition.x][gbot.attackPosition.y][1] === gbot.color) {
+        console.log("attack mode.");
+        for (let d of directions.sort(() => Math.random() - .5)) {
+          let newPos: Position = {
+            x: gbot.attackPosition.x + d[0],
+            y: gbot.attackPosition.y + d[1]
+          };
+          if (posOutOfRange(newPos) || unMoveable(gbot.gameMap[newPos.x][newPos.y], true))
+            continue;
+          if (gbot.gameMap[newPos.x][newPos.y][1] === gbot.attackColor) {
+            gbot.queue.pushBack({
+              purpose: QuePurpose.Attack,
+              priority: 999,
+              from: gbot.attackPosition,
+              to: newPos,
+              target: newPos
+            });
+            gbot.attackPosition = newPos;
+            return;
+          }
+        } // If not found, then consider conquer the city.
+        for (let d of directions.sort(() => Math.random() - .5)) {
+          let newPos: Position = {
+            x: gbot.attackPosition.x + d[0],
+            y: gbot.attackPosition.y + d[1]
+          };
+          if (posOutOfRange(newPos) || unMoveable(gbot.gameMap[newPos.x][newPos.y], false))
+            continue;
+          if (gbot.gameMap[newPos.x][newPos.y][1] === gbot.attackColor) {
+            gbot.queue.pushBack({
+              purpose: QuePurpose.Attack,
+              priority: 999,
+              from: gbot.attackPosition,
+              to: newPos,
+              target: newPos
+            });
+            gbot.attackPosition = newPos;
+            return;
+          }
+        }
+        gbot.attackColor = -1;
+        gbot.attackPosition = null;
+      } else {
+        gbot.attackColor = -1;
+        gbot.attackPosition = null;
+      }
     }
 
     if (await detectThreat()) return;
@@ -234,7 +290,7 @@ async function detectThreat(): Promise<boolean> {
     let selected = new Array<ThreatTile>();
     while (front <= end) {
       let a = queue[front++];
-      for (let d of directions) {
+      for (let d of directions.sort(() => Math.random() - .5)) {
         let b: Position = { x: a.pos.x + d[0], y: a.pos.y + d[1] };
         if (
           book.includes(JSON.stringify(b)) ||
@@ -261,8 +317,12 @@ async function detectThreat(): Promise<boolean> {
 
     selected = selected.sort((a: ThreatTile, b: ThreatTile) => b.val - a.val);
 
-    for (let threat of selected) {
-      await gatherArmies(QuePurpose.Defend, threat.val, threat.pos, 200);
+    let threat = selected[0];
+    if (threat) {
+      await gatherArmies(QuePurpose.Defend, threat.val, threat.pos, 25);
+      await gatherArmies(QuePurpose.Defend, threat.val, threat.pos, 25);
+      gbot.attackColor = threat.tile[1] as number;
+      gbot.attackPosition = threat.pos;
     }
 
     return selected.length > 0;
@@ -322,7 +382,7 @@ async function gatherArmies(
       let a = queue[front++];
       possibleWay[a.pos.x][a.pos.y].tag = true;
       if (a.step >= limit) break;
-      for (let d of directions) {
+      for (let d of directions.sort(() => Math.random() - .5)) {
         let b: Position = { x: a.pos.x + d[0], y: a.pos.y + d[1] };
         if (posOutOfRange(b) || unMoveable(gbot.gameMap[b.x][b.y], false) || possibleWay[b.x][b.y].tag)
           continue;
@@ -423,7 +483,7 @@ async function quickExpand() {
       if (a.val > 0 && !(gbot.totalViewed as boolean[][])[a.way[a.way.length - 1].x][a.way[a.way.length - 1].y]) {
         if (maxWay.val === 0) {
           maxWay = a;
-        } else if (Math.random() < .5) {
+        } else if (Math.random() < .7) {
           maxWay = a;
         }
       }

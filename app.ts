@@ -288,7 +288,7 @@ async function determineExpand(): Promise<boolean> {
       if (a[0] === gbot.color) myArmyCount = a[1];
       if (a[1] > maxArmyCount) maxArmyCount = a[1];
     }
-    if (maxArmyCount > myArmyCount * 2) {
+    if (maxArmyCount > myArmyCount * 1.5) {
       await expandLand();
       return true;
     }

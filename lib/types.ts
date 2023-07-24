@@ -24,6 +24,7 @@ export interface GBot {
   initGameInfo: initGameInfo | null;
   gameMap: TileProp[][] | null;
   totalViewed: boolean[][] | null;
+  leaderBoardData: LeaderBoardTable | null;
   queue: AttackQueue | null;
 }
 

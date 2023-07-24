@@ -16,6 +16,7 @@ import {
   ExPosition,
   AttackQueue,
   ExBFSQueueItem,
+  LeaderBoardRow,
 } from "./lib/types";
 
 dotenv.config();
@@ -37,6 +38,7 @@ const gbot: GBot = {
   initGameInfo: null,
   gameMap: null,
   totalViewed: null,
+  leaderBoardData: null,
   queue: new AttackQueue(),
 };
 
@@ -88,6 +90,7 @@ socket.on(
     leaderBoardData: LeaderBoardTable
   ) => {
     console.log(`game_update: ${turnsCount}`);
+    gbot.leaderBoardData = leaderBoardData;
     await patchMap(mapDiff);
     await handleMove(turnsCount);
   }
@@ -212,6 +215,8 @@ async function handleMove(turnsCount: number) {
       return;
     }
 
+    if (await kingInDanger()) return;
+
     if (gbot.attackColor !== -1 && gbot.attackPosition && gbot.queue) {
       if (gbot.gameMap[gbot.attackPosition.x][gbot.attackPosition.y][1] === gbot.color) {
         console.log("attack mode.");
@@ -261,6 +266,8 @@ async function handleMove(turnsCount: number) {
       }
     }
 
+    if (await determineExpand()) return;
+
     if (await detectThreat()) return;
 
     if ((turnsCount + 1) % 17 === 0) {
@@ -270,6 +277,48 @@ async function handleMove(turnsCount: number) {
     }
   } catch (err) {
     console.log(err);
+  }
+}
+
+async function determineExpand(): Promise<boolean> {
+  try {
+    if (!gbot.leaderBoardData) return false;
+    let maxArmyCount = 0, myArmyCount = 0;
+    for (let a of gbot.leaderBoardData) {
+      if (a[0] === gbot.color) myArmyCount = a[1];
+      if (a[1] > maxArmyCount) maxArmyCount = a[1];
+    }
+    if (maxArmyCount > myArmyCount * 2) {
+      await expandLand();
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.log(err);
+    return false;
+  }
+}
+
+async function kingInDanger(): Promise<boolean> {
+  try {
+    if (!gbot.myGeneral || !gbot.gameMap || !gbot.initGameInfo || !gbot.queue) return false;
+    const exDirections = [...directions, [-1, -1], [-1, 1], [1, -1], [1, 1]];
+    const mapWidth = gbot.initGameInfo.mapWidth;
+    const mapHeight = gbot.initGameInfo.mapHeight;
+    for (let d of exDirections) {
+      let tile: Position = { x: gbot.myGeneral.x + d[0], y: gbot.myGeneral.y + d[1] };
+      if (!posOutOfRange(tile)
+        && gbot.gameMap[tile.x][tile.y][1]
+        && gbot.gameMap[tile.x][tile.y][1] !== gbot.color) {
+        gbot.queue.que = [];
+        await gatherArmies(QuePurpose.Defend, 999, gbot.myGeneral, 2 * (mapWidth + mapHeight));
+        return true;
+      }
+    }
+    return false;
+  } catch (err) {
+    console.log(err);
+    return false;
   }
 }
 
@@ -319,7 +368,6 @@ async function detectThreat(): Promise<boolean> {
 
     let threat = selected[0];
     if (threat) {
-      await gatherArmies(QuePurpose.Defend, threat.val, threat.pos, 25);
       await gatherArmies(QuePurpose.Defend, threat.val, threat.pos, 25);
       gbot.attackColor = threat.tile[1] as number;
       gbot.attackPosition = threat.pos;

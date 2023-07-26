@@ -1,4 +1,10 @@
-# pybind11 demo
+# GenniaBot python example
+
+# only python
+
+python main.py
+
+# with C++
 
 Demonstrates how to call a C++ class from Python using pybind11.
 
@@ -34,3 +40,5 @@ make
 >>> my_dog.get_hunger()
 6
 ```
+
+then import your so in main.py

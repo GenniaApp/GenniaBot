@@ -28,7 +28,7 @@ if (!process.env.SERVER_URL || !process.env.ROOM_ID) {
 const gbot: GBot = {
   roomId: process.env.ROOM_ID as string,
   room: null,
-  username: process.env.NAME || "GenniaBot",
+  username: process.env.BOT_NAME || "GenniaBot",
   myPlayerId: null,
   color: null,
   attackColor: -1,

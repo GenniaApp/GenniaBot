@@ -2,3 +2,5 @@ build/
 venv/
 .cache/
 __pycache__/
+CMakeCache.txt
+CMakeFiles/

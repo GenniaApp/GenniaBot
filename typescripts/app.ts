@@ -217,7 +217,7 @@ async function handleMove(turnsCount: number) {
 
     if (await kingInDanger()) return;
 
-    if (gbot.attackColor !== -1 && gbot.attackPosition && gbot.queue) {
+    if (gbot.attackColor !== -1 && gbot.attackPosition && gbot.queue && gbot.totalViewed) {
       if (gbot.gameMap[gbot.attackPosition.x][gbot.attackPosition.y][1] === gbot.color) {
         console.log("attack mode.");
         for (let d of directions.sort(() => Math.random() - .5)) {
@@ -225,7 +225,8 @@ async function handleMove(turnsCount: number) {
             x: gbot.attackPosition.x + d[0],
             y: gbot.attackPosition.y + d[1]
           };
-          if (posOutOfRange(newPos) || unMoveable(gbot.gameMap[newPos.x][newPos.y], true))
+          if (posOutOfRange(newPos) || unMoveable(gbot.gameMap[newPos.x][newPos.y], true)
+            || gbot.totalViewed[newPos.x][newPos.y])
             continue;
           if (gbot.gameMap[newPos.x][newPos.y][1] === gbot.attackColor) {
             gbot.queue.pushBack({
@@ -310,8 +311,8 @@ async function kingInDanger(): Promise<boolean> {
       if (!posOutOfRange(tile)
         && gbot.gameMap[tile.x][tile.y][1]
         && gbot.gameMap[tile.x][tile.y][1] !== gbot.color) {
-        gbot.queue.que = [];
-        await gatherArmies(QuePurpose.Defend, 999, gbot.myGeneral, 2 * (mapWidth + mapHeight));
+        console.log("king is in danger", gbot.gameMap[tile.x][tile.y][1]);
+        await gatherArmies(QuePurpose.Defend, 999, gbot.myGeneral, 10);
         return true;
       }
     }

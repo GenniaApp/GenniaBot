@@ -60,9 +60,17 @@ socket.on("connect", () => {
 
 socket.on("update_room", (room: Room) => {
   // console.log("update_room");
-  console.log(room);
   gbot.room = room;
-  gbot.color = room.players.filter((p) => p.id === gbot.myPlayerId)[0].color;
+  let botPlayer = room.players.filter((p) => p.id === gbot.myPlayerId)[0];
+  gbot.color = botPlayer.color;
+  if (!botPlayer.forceStart) {
+    socket.emit("force_start");
+  }
+  if (botPlayer.isRoomHost && !room.gameStarted) {
+    socket.emit("tran");
+    let human_player = room.players.filter((p) => p.id != gbot.myPlayerId)[0];
+    if (human_player) socket.emit('change_host', human_player.id);
+  }
 });
 
 socket.on("set_player_id", (playerId: string) => {
@@ -74,7 +82,6 @@ socket.on("error", (title: string, message: string) => {
   // console.log("GET ERROR FROM SERVER:\n", title, message);
 });
 
-// socket.emit("force_start");
 
 socket.on("game_started", (initGameInfo: initGameInfo) => {
   // console.log("Game started:", initGameInfo);
@@ -98,12 +105,12 @@ socket.on(
 
 socket.on("game_over", (capturedBy: UserData) => {
   console.log(`game_over: ${capturedBy.username}`);
-  process.exit(0);
+  // process.exit(0);
 });
 
 socket.on("game_ended", (winner: UserData, replayLink: string) => {
   console.log(`game_ended: ${winner.username} ${replayLink}`);
-  process.exit(0);
+  // process.exit(0);
 });
 
 function initMap(mapWidth: number, mapHeight: number) {

@@ -9,6 +9,8 @@ We provide examples for the following languages:
 
 details for each example can be found in the corresponding folder's README.
 
+bot-api can be found by socket keyword `socket.emit` and `socket.on`, bot should send socket message to `https://api.gennia.io`
+
 clone with submodule
 
 ```

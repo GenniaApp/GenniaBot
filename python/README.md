@@ -6,7 +6,7 @@ python main.py
 
 # with C++
 
-Demonstrates how to call a C++ class from Python using pybind11.
+We use pybind11 to call a C++ class from Python, tutorial see : [pybind11 + python + cpp examples](https://github.com/tdegeus/pybind11_examples)
 
 ## How to build this demo
 
@@ -26,11 +26,12 @@ make
 
 ## Example test run
 
+suppose you have built a example.xxx.so
+
 ```python
->>> from example import add
+>>> from example import add, Pet
 >>> add(2, 3)
 5
->>> from example import Pet
 >>> my_dog = Pet('Pluto', 5)
 >>> my_dog.get_name()
 'Pluto'

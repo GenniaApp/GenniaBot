@@ -60,16 +60,22 @@ socket.on("connect", () => {
 
 socket.on("update_room", (room: Room) => {
   // console.log("update_room");
-  gbot.room = room;
-  let botPlayer = room.players.filter((p) => p.id === gbot.myPlayerId)[0];
-  gbot.color = botPlayer.color;
-  if (!botPlayer.forceStart) {
-    socket.emit("force_start");
-  }
-  if (botPlayer.isRoomHost && !room.gameStarted) {
-    socket.emit("tran");
-    let human_player = room.players.filter((p) => p.id != gbot.myPlayerId)[0];
-    if (human_player) socket.emit('change_host', human_player.id);
+  try {
+    gbot.room = room;
+    let botPlayer = room.players.filter((p) => p.id === gbot.myPlayerId)[0];
+    gbot.color = botPlayer.color;
+    if (!botPlayer.forceStart) {
+      socket.emit("force_start");
+    }
+    if (botPlayer.isRoomHost && !room.gameStarted) {
+      socket.emit("tran");
+      let human_player = room.players.filter((p) => p.id != gbot.myPlayerId)[0];
+      if (human_player) socket.emit('change_host', human_player.id);
+    }
+  } catch (err: any) {
+    console.log("Error in update_room");
+    console.log(err.stack);
+    process.exit(1)
   }
 });
 

@@ -197,8 +197,7 @@ async function handleMove(turnsCount: number) {
       if (gbot.gameMap[item.from.x][item.from.y][1] !== gbot.color)
         gbot.queue.popFront();
       if (
-        (item.purpose === QuePurpose.Defend ||
-          item.purpose === QuePurpose.AttackGeneral || item.purpose === QuePurpose.ExpandLand) &&
+        (item.purpose === QuePurpose.AttackGeneral || item.purpose === QuePurpose.ExpandLand) &&
         gbot.gameMap[item.target.x][item.target.y][1] === gbot.color
       )
         gbot.queue.popFront();

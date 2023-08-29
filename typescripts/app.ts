@@ -104,8 +104,14 @@ socket.on(
   ) => {
     console.log(`game_update: ${turnsCount}`);
     gbot.leaderBoardData = leaderBoardData;
-    await patchMap(mapDiff);
-    await handleMove(turnsCount);
+    try {
+      await patchMap(mapDiff);
+      await handleMove(turnsCount);
+    } catch (err: any) {
+      console.log("Error in game_update");
+      console.log(err.stack);
+      process.exit(1)
+    }
   }
 );
 

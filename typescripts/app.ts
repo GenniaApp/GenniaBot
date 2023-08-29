@@ -520,7 +520,8 @@ async function quickExpand() {
     if (a.val > 0 && !(gbot.totalViewed as boolean[][])[a.way[a.way.length - 1].x][a.way[a.way.length - 1].y]) {
       if (maxWay.val === 0) {
         maxWay = a;
-      } else if (Math.random() < .7) {
+      } else if (calcDist(a.way[a.way.length - 1], gbot.myGeneral as Position)
+        > calcDist(maxWay.way[maxWay.way.length - 1], gbot.myGeneral as Position)) {
         maxWay = a;
       }
     }

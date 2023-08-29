@@ -310,6 +310,7 @@ async function kingInDanger(): Promise<boolean> {
       && gbot.gameMap[tile.x][tile.y][1]
       && gbot.gameMap[tile.x][tile.y][1] !== gbot.color) {
       console.log("king is in danger", gbot.gameMap[tile.x][tile.y][1]);
+      await gatherArmies(QuePurpose.Defend, 999, tile, 10);
       await gatherArmies(QuePurpose.Defend, 999, gbot.myGeneral, 10);
       return true;
     }

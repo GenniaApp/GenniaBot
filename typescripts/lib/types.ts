@@ -72,7 +72,7 @@ export interface BFSQueItem {
   step: number;
 }
 
-export interface ExBFSQueueItem {
+export interface ExBFSQueItem {
   pos: Position;
   step: number;
   way: Position[];

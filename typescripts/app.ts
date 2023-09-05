@@ -17,6 +17,7 @@ import {
   AttackQueue,
   ExBFSQueItem,
   LeaderBoardRow,
+  VlPosition,
 } from "./lib/types";
 
 dotenv.config();
@@ -196,6 +197,14 @@ async function patchMap(mapDiff: MapDiffData) {
   gbot.gameMap = [...newState];
 }
 
+async function handleLandExpand(turnsCount: number) {
+  if ((turnsCount + 1) % 17 === 0) {
+    await quickExpand();
+  } else if (turnsCount + 1 > 17) {
+    await expandLand();
+  }
+}
+
 async function handleMove(turnsCount: number) {
   if (!gbot.gameMap || !gbot.initGameInfo || !gbot.color) return;
   let mapWidth = gbot.initGameInfo.mapWidth;
@@ -240,24 +249,29 @@ async function handleMove(turnsCount: number) {
     }
   }
   if (gbot.enemyGeneral.length > 0 && gbot.queue) {
+    let booked = false;
     for (let a of gbot.enemyGeneral) {
       gbot.queue.que = [];
       if (a.color === gbot.attackColor) {
-        await gatherArmies(
+        booked ||= (await gatherArmies(
           QuePurpose.AttackGeneral,
           5,
           { x: a.x, y: a.y },
           2 * (mapWidth + mapHeight)
-        );
+        )) as unknown as boolean;
       }
-      await gatherArmies(
+      booked ||= (await gatherArmies(
         QuePurpose.AttackGeneral,
         100,
         { x: a.x, y: a.y },
         2 * (mapWidth + mapHeight)
-      );
+      )) as unknown as boolean;
     }
-    return;
+    if (booked) {
+      return;
+    } else {
+      return handleLandExpand(turnsCount);
+    }
   }
 
   if (await kingInDanger()) return;
@@ -322,15 +336,12 @@ async function handleMove(turnsCount: number) {
 
   if (await detectThreat()) return;
 
-  if ((turnsCount + 1) % 17 === 0) {
-    await quickExpand();
-  } else if (turnsCount + 1 > 17) {
-    await expandLand();
-  }
+  return handleLandExpand(turnsCount);
 }
 
 async function determineExpand(): Promise<boolean> {
-  if (!gbot.leaderBoardData) return false;
+  if (!gbot.leaderBoardData || !gbot.initGameInfo || !gbot.gameMap)
+    return false;
   let maxArmyCount = 0,
     myArmyCount = 0;
   for (let a of gbot.leaderBoardData) {
@@ -340,6 +351,24 @@ async function determineExpand(): Promise<boolean> {
   if (maxArmyCount > myArmyCount * 1.5) {
     await expandLand();
     return true;
+  } else if (Math.random() < 0.3) {
+    const mapWidth = gbot.initGameInfo.mapWidth;
+    const mapHeight = gbot.initGameInfo.mapHeight;
+    let bestCity: VlPosition = { x: -1, y: -1, unit: Infinity };
+    for (let i = 0; i < mapWidth; i++) {
+      for (let j = 0; j < mapHeight; j++) {
+        if (
+          gbot.gameMap[i][j][0] === TileType.City &&
+          gbot.gameMap[i][j][1] !== gbot.color &&
+          (gbot.gameMap[i][j][2] as number) < bestCity.unit
+        ) {
+          bestCity = { x: i, y: j, unit: gbot.gameMap[i][j][2] as number };
+        }
+      }
+    }
+    if (await gatherArmies(QuePurpose.ExpandCity, 1, bestCity as Position, 34)) {
+      return true;
+    }
   }
   return false;
 }

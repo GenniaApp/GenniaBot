@@ -11,6 +11,12 @@ export interface ExPosition {
   color: number;
 }
 
+export interface VlPosition {
+  x: number;
+  y: number;
+  unit: number;
+}
+
 export interface GBot {
   roomId: string;
   room: Room | null;

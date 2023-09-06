@@ -352,7 +352,7 @@ async function handleMove(turnsCount: number) {
 }
 
 async function determineExpand(): Promise<boolean> {
-  if (!gbot.leaderBoardData || !gbot.initGameInfo || !gbot.gameMap)
+  if (!gbot.leaderBoardData || !gbot.initGameInfo || !gbot.gameMap || !gbot.myGeneral)
     return false;
   let maxArmyCount = 0,
     myArmyCount = 0;
@@ -363,7 +363,7 @@ async function determineExpand(): Promise<boolean> {
   if (maxArmyCount > myArmyCount * 1.5) {
     await expandLand();
     return true;
-  } else if (Math.random() < 0.3) {
+  } else if (maxArmyCount === myArmyCount && Math.random() < 0.3) {
     const mapWidth = gbot.initGameInfo.mapWidth;
     const mapHeight = gbot.initGameInfo.mapHeight;
     let bestCity: VlPosition = { x: -1, y: -1, unit: Infinity };
@@ -372,7 +372,7 @@ async function determineExpand(): Promise<boolean> {
         if (
           gbot.gameMap[i][j][0] === TileType.City &&
           gbot.gameMap[i][j][1] !== gbot.color &&
-          (gbot.gameMap[i][j][2] as number) < bestCity.unit
+          (gbot.gameMap[i][j][2] as number) + calcDist({x: i, y: j}, gbot.myGeneral) < bestCity.unit
         ) {
           bestCity = { x: i, y: j, unit: gbot.gameMap[i][j][2] as number };
         }

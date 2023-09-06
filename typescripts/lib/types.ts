@@ -26,6 +26,7 @@ export interface GBot {
   attackColor: number;
   attackPosition: Position | null;
   myGeneral: Position | null;
+  myGeneralThreatened: boolean;
   enemyGeneral: Array<ExPosition>;
   initGameInfo: initGameInfo | null;
   gameMap: TileProp[][] | null;

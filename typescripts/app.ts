@@ -35,6 +35,7 @@ const gbot: GBot = {
   attackColor: -1,
   attackPosition: null,
   myGeneral: null,
+  myGeneralThreatened: false,
   enemyGeneral: new Array<ExPosition>(),
   initGameInfo: null,
   gameMap: null,
@@ -132,6 +133,8 @@ function initMap(mapWidth: number, mapHeight: number) {
   gbot.totalViewed = Array.from(Array(mapWidth), () =>
     Array(mapHeight).fill(false)
   );
+  gbot.enemyGeneral = [];
+  gbot.myGeneralThreatened = false;
 }
 
 const unRevealed = (tile: TileProp) =>
@@ -206,7 +209,8 @@ async function handleLandExpand(turnsCount: number) {
 }
 
 async function handleMove(turnsCount: number) {
-  if (!gbot.gameMap || !gbot.initGameInfo || !gbot.color) return;
+  if (!gbot.gameMap || !gbot.initGameInfo || !gbot.color || !gbot.myGeneral)
+    return;
   let mapWidth = gbot.initGameInfo.mapWidth;
   let mapHeight = gbot.initGameInfo.mapHeight;
   if (gbot.queue && !gbot.queue.isEmpty()) {
@@ -242,7 +246,15 @@ async function handleMove(turnsCount: number) {
     let a = gbot.queue.popFront();
     if (a) {
       // console.log('attack:', a)
-      socket.emit("attack", a.from, a.to, false);
+      let half = false;
+      if (
+        gbot.myGeneralThreatened &&
+        a.from.x === gbot.myGeneral.x &&
+        a.from.y === gbot.myGeneral.y
+      )
+        half = true;
+      console.log("attack", a.from, a.to, half);
+      socket.emit("attack", a.from, a.to, half);
       if (a.purpose !== QuePurpose.Attack)
         // this operation doesn't have expected route
         return;
@@ -366,7 +378,10 @@ async function determineExpand(): Promise<boolean> {
         }
       }
     }
-    if (await gatherArmies(QuePurpose.ExpandCity, 1, bestCity as Position, 34)) {
+    if (
+      bestCity.x !== -1 &&
+      (await gatherArmies(QuePurpose.ExpandCity, 1, bestCity as Position, 34))
+    ) {
       return true;
     }
   }
@@ -390,6 +405,7 @@ async function kingInDanger(): Promise<boolean> {
       gbot.gameMap[tile.x][tile.y][1] !== gbot.color
     ) {
       console.log("king is in danger", gbot.gameMap[tile.x][tile.y][1]);
+      gbot.myGeneralThreatened = true;
       await gatherArmies(QuePurpose.Defend, 999, tile, 10);
       await gatherArmies(QuePurpose.Defend, 999, gbot.myGeneral, 10);
       return true;
@@ -532,7 +548,6 @@ async function gatherArmies(
   });
   // console.log("gatherArmies ended");
   if (maxWay.val <= 0) return 0;
-  console.log(maxWay.way);
   let prev: Position | null = null;
   for (let next of maxWay.way) {
     if (prev) {
@@ -582,7 +597,6 @@ async function quickExpand() {
     }
   }
   let maxWay = queue[end].way;
-  console.log("QuickExpand:", maxWay);
   let prev: Position | null = null;
   for (let next of maxWay) {
     if (prev) {

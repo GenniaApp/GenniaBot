@@ -19,17 +19,25 @@ import {
   LeaderBoardRow,
   VlPosition,
 } from "./lib/types";
+import { program } from "commander";
 
 dotenv.config();
+program
+  .option("-r, --room_id <room_id>", "RoomId to Join")
+  .option("-n, --bot_name <bot_name>", "Bot Name")
+  .option("-s, --server_url <server_url>", "Server Url to Join");
+program.parse();
 
-if (!process.env.SERVER_URL || !process.env.ROOM_ID) {
-  throw new Error("Important arguments missing.");
-}
+const options = program.opts();
+
+let room_id = options.room_id || process.env.ROOM_ID || '1';
+let server_url = options.server_url || process.env.SERVER_URL || 'http://localhost:3000';
+let bot_name = options.bot_name || process.env.BOT_NAME || 'GenniaBot';
 
 const gbot: GBot = {
-  roomId: process.env.ROOM_ID as string,
+  roomId: room_id,
   room: null,
-  username: process.env.BOT_NAME || "GenniaBot",
+  username: bot_name,
   myPlayerId: null,
   color: null,
   attackColor: -1,
@@ -51,7 +59,7 @@ const directions = [
   [0, -1],
 ];
 
-const socket = io(process.env.SERVER_URL, { query: { ...gbot } });
+const socket = io(server_url, { query: { ...gbot } });
 
 socket.emit("get_room_info");
 
@@ -73,6 +81,9 @@ socket.on("update_room", (room: Room) => {
       socket.emit("tran");
       let human_player = room.players.filter((p) => p.id != gbot.myPlayerId)[0];
       if (human_player) socket.emit("change_host", human_player.id);
+    }
+    if (botPlayer.spectating) {
+      socket.emit("set_spectating", false);
     }
   } catch (err: any) {
     console.log("Error in update_room");
@@ -372,7 +383,7 @@ async function determineExpand(): Promise<boolean> {
         if (
           gbot.gameMap[i][j][0] === TileType.City &&
           gbot.gameMap[i][j][1] !== gbot.color &&
-          (gbot.gameMap[i][j][2] as number) + calcDist({x: i, y: j}, gbot.myGeneral) < bestCity.unit
+          (gbot.gameMap[i][j][2] as number) + calcDist({ x: i, y: j }, gbot.myGeneral) < bestCity.unit
         ) {
           bestCity = { x: i, y: j, unit: gbot.gameMap[i][j][2] as number };
         }

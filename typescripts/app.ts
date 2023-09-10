@@ -201,11 +201,13 @@ async function patchMap(mapDiff: MapDiffData) {
 }
 
 async function handleLandExpand(turnsCount: number) {
+  let flag = false;
   if ((turnsCount + 1) % 17 === 0) {
-    await quickExpand();
+    if (await quickExpand()) flag = true;
   } else if (turnsCount + 1 > 17) {
-    await expandLand();
+    if (await expandLand()) flag = true;
   }
+  if (!flag) return conquerCity();
 }
 
 async function handleMove(turnsCount: number) {
@@ -344,15 +346,19 @@ async function handleMove(turnsCount: number) {
     gbot.attackPosition = null;
   }
 
-  if (await determineExpand()) return;
-
-  if (await detectThreat()) return;
+  if (await detectThreat(turnsCount)) return;
+  if (await determineExpand(turnsCount)) return;
 
   return handleLandExpand(turnsCount);
 }
 
-async function determineExpand(): Promise<boolean> {
-  if (!gbot.leaderBoardData || !gbot.initGameInfo || !gbot.gameMap || !gbot.myGeneral)
+async function determineExpand(turnsCount: number): Promise<boolean> {
+  if (
+    !gbot.leaderBoardData ||
+    !gbot.initGameInfo ||
+    !gbot.gameMap ||
+    !gbot.myGeneral
+  )
     return false;
   let maxArmyCount = 0,
     myArmyCount = 0;
@@ -361,29 +367,35 @@ async function determineExpand(): Promise<boolean> {
     if (a[1] > maxArmyCount) maxArmyCount = a[1];
   }
   if (maxArmyCount > myArmyCount * 1.5) {
-    await expandLand();
+    await handleLandExpand(turnsCount);
     return true;
-  } else if (maxArmyCount === myArmyCount && Math.random() < 0.3) {
-    const mapWidth = gbot.initGameInfo.mapWidth;
-    const mapHeight = gbot.initGameInfo.mapHeight;
-    let bestCity: VlPosition = { x: -1, y: -1, unit: Infinity };
-    for (let i = 0; i < mapWidth; i++) {
-      for (let j = 0; j < mapHeight; j++) {
-        if (
-          gbot.gameMap[i][j][0] === TileType.City &&
-          gbot.gameMap[i][j][1] !== gbot.color &&
-          (gbot.gameMap[i][j][2] as number) + calcDist({x: i, y: j}, gbot.myGeneral) < bestCity.unit
-        ) {
-          bestCity = { x: i, y: j, unit: gbot.gameMap[i][j][2] as number };
-        }
+  }
+  return false;
+}
+
+async function conquerCity(): Promise<boolean> {
+  if (!gbot.initGameInfo || !gbot.gameMap || !gbot.myGeneral) return false;
+  const mapWidth = gbot.initGameInfo.mapWidth;
+  const mapHeight = gbot.initGameInfo.mapHeight;
+  let bestCity: VlPosition = { x: -1, y: -1, unit: Infinity };
+  for (let i = 0; i < mapWidth; i++) {
+    for (let j = 0; j < mapHeight; j++) {
+      if (
+        gbot.gameMap[i][j][0] === TileType.City &&
+        gbot.gameMap[i][j][1] !== gbot.color &&
+        (gbot.gameMap[i][j][2] as number) +
+          calcDist({ x: i, y: j }, gbot.myGeneral) <
+          bestCity.unit
+      ) {
+        bestCity = { x: i, y: j, unit: gbot.gameMap[i][j][2] as number };
       }
     }
-    if (
-      bestCity.x !== -1 &&
-      (await gatherArmies(QuePurpose.ExpandCity, 1, bestCity as Position, 34))
-    ) {
-      return true;
-    }
+  }
+  if (
+    bestCity.x !== -1 &&
+    (await gatherArmies(QuePurpose.ExpandCity, 1, bestCity as Position, 34))
+  ) {
+    return true;
   }
   return false;
 }
@@ -420,8 +432,8 @@ interface ThreatTile {
   val: number;
 }
 
-async function detectThreat(): Promise<boolean> {
-  if (!gbot.myGeneral || !gbot.gameMap) return false;
+async function detectThreat(turnsCount: number): Promise<boolean> {
+  if (!gbot.myGeneral || !gbot.gameMap || !gbot.leaderBoardData) return false;
   let queue = new Array<BFSQueItem>(),
     book = new Array<string>();
   queue.push({ pos: gbot.myGeneral, step: 0 }),
@@ -460,7 +472,18 @@ async function detectThreat(): Promise<boolean> {
   selected = selected.sort((a: ThreatTile, b: ThreatTile) => b.val - a.val);
 
   let threat = selected[0];
+  console.log("threat:", threat);
   if (threat) {
+    let myArmyCount = gbot.leaderBoardData.filter(
+      (x) => x[0] === gbot.color
+    )[0][1];
+    let enemyArmyCount = gbot.leaderBoardData.filter(
+      (x) => x[0] === threat.tile[1]
+    )[0][1];
+    if (enemyArmyCount > myArmyCount * 1.1 && Math.random() > 0.5) {
+      await handleLandExpand(turnsCount);
+      return true;
+    }
     await gatherArmies(QuePurpose.Defend, threat.val, threat.pos, 25);
     gbot.attackColor = threat.tile[1] as number;
     gbot.attackPosition = threat.pos;
@@ -611,11 +634,12 @@ async function quickExpand() {
     prev = next;
   }
   // console.log("quickExpand ended");
+  return maxWay.length;
 }
 
 async function expandLand() {
   // console.log("expandLand started");
-  if (!gbot.gameMap || !gbot.initGameInfo) return;
+  if (!gbot.gameMap || !gbot.initGameInfo) return false;
   let tiles = new Array<Position>();
   let mapWidth = gbot.initGameInfo.mapWidth;
   let mapHeight = gbot.initGameInfo.mapHeight;
@@ -626,11 +650,11 @@ async function expandLand() {
         gbot.gameMap[i][j][1] !== gbot.color
       )
         tiles.push({ x: i, y: j });
+  if (tiles.length === 0) return false;
   tiles = tiles.sort(() => Math.random() - 0.5);
   let ok = false;
   for (let tile of tiles)
     if (await gatherArmies(QuePurpose.ExpandLand, 10, tile, 1)) ok = true;
-  if (!ok && tiles.length > 0)
-    await gatherArmies(QuePurpose.ExpandLand, 10, tiles[0], 10);
-  // console.log("expandLand ended");
+  if (ok) return true;
+  else return await gatherArmies(QuePurpose.ExpandLand, 10, tiles[0], 10);
 }

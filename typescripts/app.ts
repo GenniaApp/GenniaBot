@@ -30,18 +30,18 @@ program.parse();
 
 const options = program.opts();
 
-let room_id = options.room_id || process.env.ROOM_ID || '1';
-let server_url = options.server_url || process.env.SERVER_URL || 'http://localhost:3000';
-let bot_name = options.bot_name || process.env.BOT_NAME || 'GenniaBot';
-
-const gbot: GBot = {
+let room_id = options.room_id || process.env.ROOM_ID || "1";
+let server_url =
+  options.server_url || process.env.SERVER_URL || "http://localhost:3000";
+let bot_name = options.bot_name || process.env.BOT_NAME || "GenniaBot";
+let gbot: GBot = {
   roomId: room_id,
   room: null,
   username: bot_name,
   myPlayerId: null,
   color: null,
   attackColor: -1,
-  attackPosition: null,
+  attackRoute: new Array<Position>(),
   myGeneral: null,
   myGeneralThreatened: false,
   enemyGeneral: new Array<ExPosition>(),
@@ -129,11 +129,46 @@ socket.on(
 
 socket.on("game_over", (capturedBy: UserData) => {
   console.log(`game_over: ${capturedBy.username}`);
+  gbot = {
+    roomId: room_id,
+    room: null,
+    username: bot_name,
+    myPlayerId: null,
+    color: null,
+    attackColor: -1,
+    attackRoute: new Array<Position>(),
+    myGeneral: null,
+    myGeneralThreatened: false,
+    enemyGeneral: new Array<ExPosition>(),
+    initGameInfo: null,
+    gameMap: null,
+    totalViewed: null,
+    leaderBoardData: null,
+    queue: new AttackQueue(),
+  } as GBot;
   // process.exit(0);
 });
 
 socket.on("game_ended", (winner: UserData, replayLink: string) => {
   console.log(`game_ended: ${winner.username} ${replayLink}`);
+  
+  gbot = {
+    roomId: room_id,
+    room: null,
+    username: bot_name,
+    myPlayerId: null,
+    color: null,
+    attackColor: -1,
+    attackRoute: new Array<Position>(),
+    myGeneral: null,
+    myGeneralThreatened: false,
+    enemyGeneral: new Array<ExPosition>(),
+    initGameInfo: null,
+    gameMap: null,
+    totalViewed: null,
+    leaderBoardData: null,
+    queue: new AttackQueue(),
+  } as GBot;
   // process.exit(0);
 });
 
@@ -144,8 +179,6 @@ function initMap(mapWidth: number, mapHeight: number) {
   gbot.totalViewed = Array.from(Array(mapWidth), () =>
     Array(mapHeight).fill(false)
   );
-  gbot.enemyGeneral = [];
-  gbot.myGeneralThreatened = false;
 }
 
 const unRevealed = (tile: TileProp) =>
@@ -218,149 +251,165 @@ async function handleLandExpand(turnsCount: number) {
   } else if (turnsCount + 1 > 17) {
     if (await expandLand()) flag = true;
   }
-  if (!flag) return conquerCity();
+  if (!flag) return quickExpand();
 }
 
 async function handleMove(turnsCount: number) {
-  if (!gbot.gameMap || !gbot.initGameInfo || !gbot.color || !gbot.myGeneral)
-    return;
-  let mapWidth = gbot.initGameInfo.mapWidth;
-  let mapHeight = gbot.initGameInfo.mapHeight;
-  if (gbot.queue && !gbot.queue.isEmpty()) {
-    while (!gbot.queue.isEmpty()) {
-      let item = gbot.queue.que[0];
-      if (gbot.gameMap[item.from.x][item.from.y][1] !== gbot.color) {
-        if (item.purpose === QuePurpose.Attack) {
-          gbot.attackColor = -1;
-          gbot.attackPosition = null;
-        }
-        gbot.queue.popFront();
-        console.log(
-          `(${item.from.x}, ${item.from.y}):`,
-          "expect",
-          gbot.color,
-          "but",
-          gbot.gameMap[item.from.x][item.from.y][1]
-        );
-      }
-      if (
-        (item.purpose === QuePurpose.AttackGeneral ||
-          item.purpose === QuePurpose.ExpandLand) &&
-        gbot.gameMap[item.target.x][item.target.y][1] === gbot.color
-      ) {
-        gbot.queue.popFront();
-        console.log(
-          `(${item.from.x}, ${item.from.y}):`,
-          "already occupied by me"
-        );
-      } else break;
-    }
-
-    let a = gbot.queue.popFront();
-    if (a) {
-      // console.log('attack:', a)
-      let half = false;
-      if (
-        gbot.myGeneralThreatened &&
-        a.from.x === gbot.myGeneral.x &&
-        a.from.y === gbot.myGeneral.y
-      )
-        half = true;
-      console.log("attack", a.from, a.to, half);
-      socket.emit("attack", a.from, a.to, half);
-      if (a.purpose !== QuePurpose.Attack)
-        // this operation doesn't have expected route
-        return;
-    }
-  }
-  if (gbot.enemyGeneral.length > 0 && gbot.queue) {
-    let booked = false;
-    for (let a of gbot.enemyGeneral) {
-      gbot.queue.que = [];
-      if (a.color === gbot.attackColor) {
-        booked ||= (await gatherArmies(
-          QuePurpose.AttackGeneral,
-          5,
-          { x: a.x, y: a.y },
-          2 * (mapWidth + mapHeight)
-        )) as unknown as boolean;
-      }
-      booked ||= (await gatherArmies(
-        QuePurpose.AttackGeneral,
-        100,
-        { x: a.x, y: a.y },
-        2 * (mapWidth + mapHeight)
-      )) as unknown as boolean;
-    }
-    if (booked) {
+  try {
+    if (!gbot.gameMap || !gbot.initGameInfo || !gbot.color || !gbot.myGeneral)
       return;
-    } else {
-      return handleLandExpand(turnsCount);
+    let mapWidth = gbot.initGameInfo.mapWidth;
+    let mapHeight = gbot.initGameInfo.mapHeight;
+    if (gbot.queue && !gbot.queue.isEmpty()) {
+      while (!gbot.queue.isEmpty()) {
+        let item = gbot.queue.que[0];
+        if (gbot.gameMap[item.from.x][item.from.y][1] !== gbot.color) {
+          if (item.purpose === QuePurpose.Attack) {
+            gbot.attackColor = -1;
+            gbot.attackRoute = [];
+          }
+          gbot.queue.popFront();
+          console.log(
+            `(${item.from.x}, ${item.from.y}):`,
+            "expect",
+            gbot.color,
+            "but",
+            gbot.gameMap[item.from.x][item.from.y][1]
+          );
+        }
+        if (
+          (item.purpose === QuePurpose.AttackGeneral ||
+            item.purpose === QuePurpose.ExpandLand) &&
+          gbot.gameMap[item.target.x][item.target.y][1] === gbot.color
+        ) {
+          gbot.queue.popFront();
+          console.log(
+            `(${item.from.x}, ${item.from.y}):`,
+            "already occupied by me"
+          );
+        } else break;
+      }
+
+      let a = gbot.queue.popFront();
+      if (a) {
+        // console.log('attack:', a)
+        let half = false;
+        if (
+          gbot.myGeneralThreatened &&
+          a.from.x === gbot.myGeneral.x &&
+          a.from.y === gbot.myGeneral.y
+        )
+          half = true;
+        // console.log("attack", a.from, a.to, half);
+        socket.emit("attack", a.from, a.to, half);
+        if (a.purpose !== QuePurpose.Attack)
+          // this operation doesn't have expected route
+          return;
+      }
     }
-  }
+    if (gbot.enemyGeneral.length > 0 && gbot.queue) {
+      let booked = false;
+      for (let a of gbot.enemyGeneral) {
+        gbot.queue.que = [];
+        if (a.color === gbot.attackColor) {
+          booked ||= await gatherArmies(
+            QuePurpose.AttackGeneral,
+            5,
+            { x: a.x, y: a.y },
+            2 * (mapWidth + mapHeight)
+          );
+        }
+        booked ||= await gatherArmies(
+          QuePurpose.AttackGeneral,
+          100,
+          { x: a.x, y: a.y },
+          2 * (mapWidth + mapHeight),
+          true
+        );
+      }
+      if (booked) {
+        return;
+      } else {
+        return handleLandExpand(turnsCount);
+      }
+    }
 
-  if (await kingInDanger()) return;
+    if (await kingInDanger()) return;
 
-  if (
-    gbot.attackColor !== -1 &&
-    gbot.attackPosition &&
-    gbot.queue &&
-    gbot.totalViewed
-  ) {
-    console.log("attack mode.");
-    for (let d of directions.sort(() => Math.random() - 0.5)) {
-      let newPos: Position = {
-        x: gbot.attackPosition.x + d[0],
-        y: gbot.attackPosition.y + d[1],
-      };
-      if (
-        posOutOfRange(newPos) ||
-        unMoveable(gbot.gameMap[newPos.x][newPos.y], true) ||
-        gbot.totalViewed[newPos.x][newPos.y]
-      )
-        continue;
-      if (gbot.gameMap[newPos.x][newPos.y][1] === gbot.attackColor) {
+    if (
+      gbot.attackColor !== -1 &&
+      gbot.attackRoute.length > 0 &&
+      gbot.queue &&
+      gbot.totalViewed
+    ) {
+      console.log("attack mode.");
+      for (let d of directions.sort(() => Math.random() - 0.5)) {
+        let newPos: Position = {
+          x: gbot.attackRoute[gbot.attackRoute.length - 1].x + d[0],
+          y: gbot.attackRoute[gbot.attackRoute.length - 1].y + d[1],
+        };
+        if (
+          posOutOfRange(newPos) ||
+          unMoveable(gbot.gameMap[newPos.x][newPos.y], true) ||
+          gbot.totalViewed[newPos.x][newPos.y]
+        )
+          continue;
+        if (gbot.gameMap[newPos.x][newPos.y][1] === gbot.attackColor) {
+          gbot.queue.pushBack({
+            purpose: QuePurpose.Attack,
+            priority: 999,
+            from: gbot.attackRoute[gbot.attackRoute.length - 1],
+            to: newPos,
+            target: newPos,
+          });
+          gbot.attackRoute.push(newPos);
+          return;
+        }
+      } // If not found, then consider conquer the city.
+      for (let d of directions.sort(() => Math.random() - 0.5)) {
+        let newPos: Position = {
+          x: gbot.attackRoute[gbot.attackRoute.length - 1].x + d[0],
+          y: gbot.attackRoute[gbot.attackRoute.length - 1].y + d[1],
+        };
+        if (
+          posOutOfRange(newPos) ||
+          unMoveable(gbot.gameMap[newPos.x][newPos.y], false)
+        )
+          continue;
+        if (gbot.gameMap[newPos.x][newPos.y][1] === gbot.attackColor) {
+          gbot.queue.pushBack({
+            purpose: QuePurpose.Attack,
+            priority: 999,
+            from: gbot.attackRoute[gbot.attackRoute.length - 1],
+            to: newPos,
+            target: newPos,
+          });
+          gbot.attackRoute.push(newPos);
+          return;
+        }
+      }
+      if (gbot.attackRoute.length >= 2) {
         gbot.queue.pushBack({
           purpose: QuePurpose.Attack,
           priority: 999,
-          from: gbot.attackPosition,
-          to: newPos,
-          target: newPos,
+          from: gbot.attackRoute[gbot.attackRoute.length - 1],
+          to: gbot.attackRoute[gbot.attackRoute.length - 2],
+          target: gbot.attackRoute[gbot.attackRoute.length - 2],
         });
-        gbot.attackPosition = newPos;
-        return;
-      }
-    } // If not found, then consider conquer the city.
-    for (let d of directions.sort(() => Math.random() - 0.5)) {
-      let newPos: Position = {
-        x: gbot.attackPosition.x + d[0],
-        y: gbot.attackPosition.y + d[1],
-      };
-      if (
-        posOutOfRange(newPos) ||
-        unMoveable(gbot.gameMap[newPos.x][newPos.y], false)
-      )
-        continue;
-      if (gbot.gameMap[newPos.x][newPos.y][1] === gbot.attackColor) {
-        gbot.queue.pushBack({
-          purpose: QuePurpose.Attack,
-          priority: 999,
-          from: gbot.attackPosition,
-          to: newPos,
-          target: newPos,
-        });
-        gbot.attackPosition = newPos;
-        return;
+        gbot.attackRoute.length--;
+      } else {
+        gbot.attackColor = -1;
+        gbot.attackRoute = [];
       }
     }
-    gbot.attackColor = -1;
-    gbot.attackPosition = null;
+
+    if (await detectThreat(turnsCount)) return;
+    if (await determineExpand(turnsCount)) return;
+
+    return handleLandExpand(turnsCount);
+  } catch (e) {
+    console.log(e);
   }
-
-  if (await detectThreat(turnsCount)) return;
-  if (await determineExpand(turnsCount)) return;
-
-  return handleLandExpand(turnsCount);
 }
 
 async function determineExpand(turnsCount: number): Promise<boolean> {
@@ -375,11 +424,14 @@ async function determineExpand(turnsCount: number): Promise<boolean> {
     myArmyCount = 0;
   for (let a of gbot.leaderBoardData) {
     if (a[0] === gbot.color) myArmyCount = a[1];
-    if (a[1] > maxArmyCount) maxArmyCount = a[1];
+    if (gbot.attackColor === a[0] || a[1] > maxArmyCount) maxArmyCount = a[1];
   }
-  if (maxArmyCount > myArmyCount * 1.5) {
-    await handleLandExpand(turnsCount);
+
+  if (maxArmyCount > myArmyCount * 1.7) {
+    await conquerCity();
     return true;
+  } else if (gbot.attackColor !== -1 && Math.random() > 0.5) {
+    await handleLandExpand(turnsCount);
   }
   return false;
 }
@@ -491,13 +543,13 @@ async function detectThreat(turnsCount: number): Promise<boolean> {
     let enemyArmyCount = gbot.leaderBoardData.filter(
       (x) => x[0] === threat.tile[1]
     )[0][1];
-    if (enemyArmyCount > myArmyCount * 1.1 && Math.random() > 0.5) {
+    if (enemyArmyCount > myArmyCount * 1.5 && Math.random() > 0.5) {
       await handleLandExpand(turnsCount);
       return true;
     }
-    await gatherArmies(QuePurpose.Defend, threat.val, threat.pos, 25);
+    await gatherArmies(QuePurpose.Defend, threat.val, threat.pos, 25, true);
     gbot.attackColor = threat.tile[1] as number;
-    gbot.attackPosition = threat.pos;
+    gbot.attackRoute.push(threat.pos);
   }
 
   return selected.length > 0;
@@ -513,10 +565,11 @@ async function gatherArmies(
   purpose: QuePurpose,
   priority: number,
   toPos: Position,
-  limit: number
-): Promise<number> {
+  limit: number,
+  attackMode?: boolean
+): Promise<boolean> {
   // console.log("gatherArmies started");
-  if (!gbot.gameMap || !gbot.queue || !gbot.initGameInfo) return 0;
+  if (!gbot.gameMap || !gbot.queue || !gbot.initGameInfo) return false;
   let mapWidth = gbot.initGameInfo.mapWidth;
   let mapHeight = gbot.initGameInfo.mapHeight;
   let queue = new Array<BFSQueItem>();
@@ -581,22 +634,82 @@ async function gatherArmies(
     if (x.val > maxWay.val) maxWay = x;
   });
   // console.log("gatherArmies ended");
-  if (maxWay.val <= 0) return 0;
-  let prev: Position | null = null;
-  for (let next of maxWay.way) {
-    if (prev) {
-      gbot.queue.pushBack({
-        from: prev,
-        to: next,
-        purpose,
-        priority,
-        target: maxWay.way[maxWay.way.length - 1],
-      });
+  if (maxWay.val <= 0) return false;
+  let finalRoute: any = [];
+  if (attackMode) {
+    queue = [];
+    for (let i = 0; i < mapWidth; i++) {
+      possibleWay[i] = new Array<PossibleWay>(mapHeight);
+      for (let j = 0; j < mapHeight; j++) {
+        possibleWay[i][j] = {
+          val: -9999999,
+          way: [],
+          tag: false,
+        };
+      }
     }
-    prev = next;
+    for (let a of maxWay.way) {
+      queue.push({ pos: a, step: 0 });
+      possibleWay[a.x][a.y] = {
+        val: gbot.gameMap[a.x][a.y][2] as number,
+        way: [a],
+        tag: true,
+      };
+    }
+    front = 0;
+    end = queue.length - 1;
+    while (front <= end) {
+      let a = queue[front++];
+      if (a.step >= limit / 2) break;
+      for (let d of directions.sort(() => Math.random() - 0.5)) {
+        let b: Position = { x: a.pos.x + d[0], y: a.pos.y + d[1] };
+        if (
+          posOutOfRange(b) ||
+          unMoveable(gbot.gameMap[b.x][b.y], false) ||
+          possibleWay[b.x][b.y].tag ||
+          gbot.gameMap[b.x][b.y][1] !== gbot.color
+        ) {
+          continue;
+        }
+        let newVal =
+          possibleWay[a.pos.x][a.pos.y].val -
+          2 +
+          (gbot.gameMap[b.x][b.y][2] as number);
+        if (possibleWay[b.x][b.y].val >= newVal) continue;
+        let newWay = [b, ...possibleWay[a.pos.x][a.pos.y].way];
+        queue.push({ step: a.step + 1, pos: b }), ++end;
+        possibleWay[b.x][b.y] = {
+          val: newVal,
+          way: newWay,
+          tag: true,
+        };
+      }
+    }
+
+    let tmp = possibleWay.flat().sort((a, b) => b.val - a.val);
+    tmp.slice(0, 2).forEach((r) => {
+      if (r.way) finalRoute.push(r.way);
+    });
+  }
+  finalRoute.push(maxWay.way);
+  console.log(finalRoute);
+  for (let way of finalRoute) {
+    let prev: Position | null = null;
+    for (let next of way) {
+      if (prev) {
+        gbot.queue.pushBack({
+          from: prev,
+          to: next,
+          purpose,
+          priority,
+          target: way[way.length - 1],
+        });
+      }
+      prev = next;
+    }
   }
   // console.log("gatherArmies ended");
-  return maxWay.way.length;
+  return maxWay.way.length > 0;
 }
 
 async function quickExpand() {

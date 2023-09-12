@@ -24,7 +24,7 @@ export interface GBot {
   myPlayerId: string | null;
   color: number | null;
   attackColor: number;
-  attackPosition: Position | null;
+  attackRoute: Array<Position>;
   myGeneral: Position | null;
   myGeneralThreatened: boolean;
   enemyGeneral: Array<ExPosition>;

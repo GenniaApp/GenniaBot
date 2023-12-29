@@ -97,6 +97,14 @@ socket.on("game_ended", (winner: UserData, replayLink: string) => {
     process.exit(0);
 });
 
+socket.on("attack_success", (from: Point, to: Point, turn: number) => {
+    console.log(`attack_success: ${from} ${to} ${turn}`);
+});
+
+socket.on("attack_failure", (from: Point, to: Point, msg: string) => {
+    console.log(`attack_failure: ${from} ${to} ${msg}`);
+});
+
 function initMap(mapWidth: number, mapHeight: number) {
     gbot.gameMap = Array.from(Array(mapWidth), () =>
         Array(mapHeight).fill([TileType.Fog, null, null])
@@ -143,5 +151,6 @@ function handleMove() {
     let target = lands[Math.floor(Math.random() * lands.length)];
     if (!target) return;
     let direction = directions[Math.floor(Math.random() * directions.length)];
-    socket.emit('attack', target, { x: target.x + direction[0], y: target.y + direction[1] });
+
+    socket.emit('attack', target, { x: target.x + direction[0], y: target.y + direction[1] }, false);
 }
